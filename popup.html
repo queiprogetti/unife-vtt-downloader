@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UniFE VTT Downloader</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <h1>🎓 UniFE VTT Downloader</h1>
+    <p id="status" class="status">Pronto per leggere la trascrizione della scheda corrente.</p>
+    <label class="check"><input id="timestamps" type="checkbox" checked> Includi timestamp nel TXT</label>
+    <label class="field-label" for="filename">Nome del file</label>
+    <input id="filename" type="text" maxlength="180" placeholder="Nome della lezione">
+    <div class="actions">
+      <button id="download-vtt" class="primary">Scarica VTT</button>
+      <button id="download-txt">Scarica TXT</button>
+      <button id="copy-txt">Copia TXT</button>
+    </div>
+    <p class="footnote">Elaborazione locale: la trascrizione non viene inviata a server esterni.</p>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
