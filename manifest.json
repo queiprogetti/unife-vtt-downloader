@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "UniFE VTT Downloader",
+  "version": "0.2.1",
+  "description": "Esporta localmente le trascrizioni delle videolezioni con i timestamp.",
+  "permissions": ["activeTab", "scripting"],
+  "host_permissions": [
+    "https://drive.google.com/*",
+    "https://elearning.unife.it/*",
+    "https://player.vimeo.com/*",
+    "https://captions.vimeo.com/*"
+  ],
+  "action": {
+    "default_title": "UniFE VTT Downloader",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://drive.google.com/file/d/*"],
+      "js": ["content.js"]
+    },
+    {
+      "matches": ["https://elearning.unife.it/mod/videotime/view.php*"],
+      "js": ["content.js"]
+    }
+  ]
+}
