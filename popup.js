@@ -1,8 +1,21 @@
+// Shim cross-browser: Firefox espone il namespace "browser" (promise),
+// Chrome/Edge il namespace "chrome". Firefox supporta anche "chrome",
+// ma preferiamo "browser" quando disponibile.
+const api = typeof browser !== 'undefined' && browser.runtime ? browser : chrome;
+
 const statusEl = document.getElementById('status');
 const filenameEl = document.getElementById('filename');
 const timestampsEl = document.getElementById('timestamps');
-const buttons = [...document.querySelectorAll('button')];
+const grantButton = document.getElementById('grant');
+const buttons = [...document.querySelectorAll('button')].filter(b => b.id !== 'grant');
 let transcript = null;
+
+const REQUIRED_ORIGINS = [
+  'https://drive.google.com/*',
+  'https://elearning.unife.it/*',
+  'https://player.vimeo.com/*',
+  'https://captions.vimeo.com/*'
+];
 
 function setStatus(message, isError = false) {
   statusEl.textContent = message;
@@ -54,21 +67,33 @@ function downloadText(content, extension, mimeType) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// In Firefox (MV3) gli host_permissions NON vengono concessi automaticamente
+// all'installazione: vanno richiesti da un gesto dell'utente (click su pulsante).
+// In Chrome/Edge i permessi host sono già concessi all'installazione, quindi
+// questa funzione restituisce sempre true.
+async function hasHostPermissions() {
+  if (!api.permissions || !api.permissions.contains) return true;
+  try {
+    return await api.permissions.contains({ origins: REQUIRED_ORIGINS });
+  } catch {
+    // Se il controllo non è supportato, assumiamo permessi presenti.
+    return true;
+  }
+}
+
 async function extractVimeoTranscript(tabId) {
-  const results = await chrome.scripting.executeScript({
+  const results = await api.scripting.executeScript({
     target: { tabId, allFrames: true },
     func: () => ({
       pageTitle: document.title,
       pageUrl: location.href,
-      tracks: [...document.querySelectorAll('track[src]')].map(track => ({
-        src: track.src, language: track.srclang, kind: track.kind, label: track.label
-      }))
+      tracks: [...document.querySelectorAll('track[src]')].map(track => ({ src: track.src, language: track.srclang, kind: track.kind, label: track.label }))
     })
   });
 
   const playerResult = results.find(result =>
     result.result?.pageUrl?.startsWith('https://player.vimeo.com/') &&
-    result.result.tracks?.some(track => track.src)
+    result.result?.tracks?.some(track => track.src)
   );
   const track = playerResult?.result?.tracks?.find(item => item.src);
   if (!track) throw new Error('Non trovo una traccia sottotitoli nel player Vimeo. Apri la lezione e verifica che il pannello Transcript sia disponibile, poi riprova.');
@@ -116,7 +141,17 @@ function parseVtt(vtt) {
 }
 
 async function extract() {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  // Firefox: senza permessi host non possiamo né leggere le pagine né
+  // scaricare la traccia da captions.vimeo.com. Chiediamo il consenso
+  // con un pulsante (serve un gesto dell'utente per permissions.request).
+  if (!(await hasHostPermissions())) {
+    grantButton.hidden = false;
+    setStatus('Premi “Concedi permessi” per autorizzare la lettura delle trascrizioni.');
+    return;
+  }
+  grantButton.hidden = true;
+
+  const [tab] = await api.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || !tab.url) throw new Error('Non riesco a individuare la scheda attiva.');
   const url = new URL(tab.url);
   if (!['drive.google.com', 'elearning.unife.it'].includes(url.hostname)) throw new Error('Apri un webinar Google Drive o una videolezione UniFE.');
@@ -124,7 +159,7 @@ async function extract() {
 
   const response = url.hostname === 'elearning.unife.it'
     ? await extractVimeoTranscript(tab.id)
-    : await chrome.tabs.sendMessage(tab.id, { type: 'UNIFE_VTT_EXTRACT' });
+    : await api.tabs.sendMessage(tab.id, { type: 'UNIFE_VTT_EXTRACT' });
 
   if (!response?.ok) throw new Error(response?.reason || 'Trascrizione non trovata.');
   transcript = response;
@@ -135,6 +170,20 @@ async function extract() {
 
 buttons.forEach(button => button.disabled = true);
 extract().catch(error => setStatus(error.message, true));
+
+grantButton.addEventListener('click', async () => {
+  try {
+    const granted = await api.permissions.request({ origins: REQUIRED_ORIGINS });
+    if (!granted) {
+      setStatus('Permessi non concessi: senza consenso non posso leggere la trascrizione.', true);
+      return;
+    }
+  } catch (error) {
+    setStatus('Impossibile richiedere i permessi: ' + error.message, true);
+    return;
+  }
+  await extract().catch(err => setStatus(err.message, true));
+});
 
 document.getElementById('download-vtt').addEventListener('click', () => {
   if (!transcript) return;
@@ -154,6 +203,6 @@ document.getElementById('copy-txt').addEventListener('click', async () => {
     await navigator.clipboard.writeText(buildTxt(timestampsEl.checked));
     setStatus('Trascrizione copiata negli appunti.');
   } catch {
-    setStatus('Chrome non ha consentito l’accesso agli appunti. Usa Scarica TXT.', true);
+    setStatus('Il browser non ha consentito l’accesso agli appunti. Usa Scarica TXT.', true);
   }
 });

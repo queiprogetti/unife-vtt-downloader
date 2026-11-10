@@ -1,4 +1,6 @@
 (() => {
+  const api = typeof browser !== 'undefined' && browser.runtime ? browser : chrome;
+
   function parseTimeLabel(label) {
     const match = label.trim().match(/^(?:(\d+):)?(\d{1,2}):(\d{2})$/);
     if (!match) return null;
@@ -53,7 +55,7 @@
     return [];
   }
 
-  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  api.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type !== 'UNIFE_VTT_EXTRACT') return;
     try {
       const isDrive = location.hostname === 'drive.google.com';
